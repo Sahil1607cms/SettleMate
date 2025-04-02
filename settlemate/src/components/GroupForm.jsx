@@ -65,7 +65,7 @@ const GroupForm = () => {
       "groups",
       JSON.stringify([...existingGroups, newGroup])
     );
-    //marking and storing the current group on which we are working as "currentGroup"
+    //marking and storing the current group on which we are working as "currentGro"
     localStorage.setItem("currentGroup", JSON.stringify(newGroup));
 
     navigate("/transactions");

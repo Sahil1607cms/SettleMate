@@ -1,114 +1,344 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import DebtGraph from "./DebtGraph";
+import DebtSettlements from "./DebtSettlements";
 
-const Transactions = () => {
-  const [transactions, setTransactions] = useState([]); //array of objects
-  const [groupInfo, setGroupInfo] = useState({ members: [] });
-  const [newTransactions, setNewTransactions] = useState({
-    payer: "",
-    purpose: "",
-    amount: "",
-    splitAmong: {},
-    date: "",
+const initializeTransaction = (members, defaultPayer = "") => ({
+  payer: defaultPayer || (members.length > 0 ? members[0] : ""),
+  purpose: "",
+  amount: "",
+  splitAmong: members.reduce((acc, member) => {
+    // Initialize all members except payer
+    if (member !== defaultPayer) acc[member] = 0;
+    return acc;
+  }, {}),
+  date: new Date().toISOString().split("T")[0],
+});
+
+const calculateShares = (transaction, splitType) => {
+  if (splitType === "equal") {
+    // For equal splits, include ALL members (payer + selected members)
+    const selectedMembers = Object.keys(transaction.splitAmong);
+    const totalParticipants = selectedMembers.length + 1; // +1 for payer
+    const share = transaction.amount / totalParticipants;
+
+    return selectedMembers.reduce((acc, member) => {
+      acc[member] = share;
+      return acc;
+    }, {});
+  }
+  return { ...transaction.splitAmong };
+};
+
+const updateDebtGraph = (currentGraph, transaction, shares) => {
+  const updatedGraph = JSON.parse(JSON.stringify(currentGraph));
+  const payer = transaction.payer;
+
+  Object.entries(shares).forEach(([member, share]) => {
+    if (member !== payer) {
+      updatedGraph[payer][member] = (updatedGraph[payer][member] || 0) + share;
+      updatedGraph[member][payer] = (updatedGraph[member][payer] || 0) - share;
+    }
   });
 
-  useEffect(() => {
-    const storedGroup = localStorage.getItem("GroupInfo");
-    if (storedGroup) {
-      const parsedGroup = JSON.parse(storedGroup);
-      setGroupInfo(parsedGroup);
-    }
-  }, []);
+  return updatedGraph;
+};
 
-  // dynamic function for storing the transaction
+const validateTransaction = (transaction, splitType) => {
+  const amount = parseFloat(transaction.amount);
+  if (isNaN(amount)) return "Please enter a valid amount";
+  if (amount <= 0) return "Amount must be greater than 0";
+
+  const selectedMembers = Object.keys(transaction.splitAmong);
+  if (selectedMembers.length === 0)
+    return "Please select at least one person who owes";
+
+  if (splitType === "custom") {
+    const totalCustomAmount = Object.values(transaction.splitAmong).reduce(
+      (sum, val) => sum + val,
+      0
+    );
+    if (Math.abs(totalCustomAmount - amount) > 0.01) {
+      return `Total custom amounts (${totalCustomAmount.toFixed(
+        2
+      )}) must equal transaction amount (${amount.toFixed(2)})`;
+    }
+  }
+
+  return null;
+};
+
+const Transactions = () => {
+  const [transactions, setTransactions] = useState([]);
+  const [groupInfo, setGroupInfo] = useState({ members: [], debtGraph: {} });
+  const [newTransaction, setNewTransaction] = useState(null);
+  const [splitType, setSplitType] = useState("equal");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const storedGroup = JSON.parse(localStorage.getItem("currentGroup"));
+    if (storedGroup) {
+      setGroupInfo(storedGroup);
+      setNewTransaction(
+        initializeTransaction(storedGroup.members, storedGroup.members[0])
+      );
+    } else {
+      navigate("/");
+    }
+  }, [navigate]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setNewTransactions((prev) => ({ ...prev, [name]: value }));
+    setNewTransaction((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSplitTypeChange = (e) => {
+    const newSplitType = e.target.value;
+    setSplitType(newSplitType);
+    setNewTransaction((prev) => ({
+      ...prev,
+      splitAmong: groupInfo.members.reduce((acc, member) => {
+        acc[member] = 0; // Include all members
+        return acc;
+      }, {}),
+    }));
   };
 
   const handleCheckboxChange = (member) => {
-    setNewTransactions((prev) => {
+    setNewTransaction((prev) => {
       const updatedSplitAmong = { ...prev.splitAmong };
-      if (updatedSplitAmong[member]) delete updatedSplitAmong[member];
-      else updatedSplitAmong[member] = 0;
+      if (updatedSplitAmong[member] === undefined) {
+        updatedSplitAmong[member] = 0;
+      } else {
+        delete updatedSplitAmong[member];
+      }
       return { ...prev, splitAmong: updatedSplitAmong };
     });
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleAmountChange = (member, value) => {
+    setNewTransaction((prev) => ({
+      ...prev,
+      splitAmong: {
+        ...prev.splitAmong,
+        [member]: parseFloat(value) || 0,
+      },
+    }));
   };
 
-  // console.log(groupInfo.members);
+  const handleClearDebt = (from, to) => {
+    const updatedDebtGraph = { ...groupInfo.debtGraph };
+    updatedDebtGraph[from][to] = 0;
+    updatedDebtGraph[to][from] = 0;
+    setGroupInfo({ ...groupInfo, debtGraph: updatedDebtGraph });
+    localStorage.setItem(
+      "currentGroup",
+      JSON.stringify({
+        ...groupInfo,
+        debtGraph: updatedDebtGraph,
+      })
+    );
+  };
+
+  const addTransaction = (e) => {
+    e.preventDefault();
+
+    const error = validateTransaction(newTransaction, splitType);
+    if (error) return alert(error);
+
+    const shares = calculateShares(newTransaction, splitType);
+    const updatedDebtGraph = updateDebtGraph(
+      groupInfo.debtGraph,
+      newTransaction,
+      shares
+    );
+
+    const transactionRecord = {
+      id: Date.now(),
+      payer: newTransaction.payer,
+      purpose: newTransaction.purpose,
+      amount: parseFloat(newTransaction.amount),
+      shares,
+      date: newTransaction.date,
+      splitType,
+    };
+
+    const updatedGroup = {
+      ...groupInfo,
+      debtGraph: updatedDebtGraph,
+    };
+
+    setGroupInfo(updatedGroup);
+    setTransactions([...transactions, transactionRecord]);
+    setNewTransaction(
+      initializeTransaction(groupInfo.members, newTransaction.payer)
+    );
+    localStorage.setItem("currentGroup", JSON.stringify(updatedGroup));
+  };
+
+  if (!newTransaction) return <div>Loading...</div>;
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-lg max-w-lg mx-auto mt-10">
+    <div className="bg-white p-6 rounded-lg shadow-lg max-w-3xl mx-auto mt-10">
       <h2 className="text-2xl font-bold mb-4 text-center">Add transactions</h2>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <label>Who paid?</label>
-        <select
-          className="border p-2 rounded"
-          name="payer"
-          value={
-            newTransactions.payer ||
-            (groupInfo.members.length > 0 ? groupInfo.members[0] : "")
-          }
-          onChange={handleInputChange}
-          required
-          id=""
-        >
-          {groupInfo.members.map((member, index) => (
-            <option key={index} value={member}>
-              {member}
-            </option>
-          ))}
-        </select>
 
-        <label>What for?</label>
-        <input
-          type="text"
-          className="border p-2 rounded"
-          name="purpose"
-          placeholder="e.g., Dinner, Tickets"
-          value={newTransactions.purpose}
-          onChange={handleInputChange}
-          required
-        />
-
-        <label>Amount</label>
-        <input
-          type="number"
-          className="border p-2 rounded"
-          name="amount"
-          placeholder="e.g., 100"
-          value={newTransactions.amount}
-          onChange={handleInputChange}
-          required
-        />
-
-        <label>Who owes?</label>
-        <div className="flex flex-wrap gap-2">
-          {groupInfo.members.map((member, index) => (
-            <label key={index}>
-              {" "}
-              <input
-                type="checkbox"
-                checked={newTransactions.splitAmong.hasOwnProperty(member)}
-                onChange={() => handleCheckboxChange(member)}
-              />
-               {member}
-            </label>
-          ))}
+      <form onSubmit={addTransaction} className="flex flex-col gap-4 mb-6">
+        <div>
+          <label className="block mb-1">Who paid?</label>
+          <select
+            className="border p-2 rounded w-full"
+            name="payer"
+            value={newTransaction.payer}
+            onChange={handleInputChange}
+            required
+          >
+            {groupInfo.members.map((member, index) => (
+              <option key={index} value={member}>
+                {member}
+              </option>
+            ))}
+          </select>
         </div>
-        <label>When?</label>
-        <input
-          type="date"
-          className="border p-2 rounded"
-          name="date"
-          value={newTransactions.date}
-          onChange={handleInputChange}
-          required
-        />
+
+        <div>
+          <label className="block mb-1">What for?</label>
+          <input
+            type="text"
+            className="border p-2 rounded w-full"
+            name="purpose"
+            placeholder="e.g., Dinner, Tickets"
+            value={newTransaction.purpose}
+            onChange={handleInputChange}
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block mb-1">Amount</label>
+          <input
+            type="number"
+            className="border p-2 rounded w-full"
+            name="amount"
+            placeholder="e.g., 100"
+            value={newTransaction.amount}
+            onChange={handleInputChange}
+            min="0.01"
+            step="0.01"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block mb-1">Split Type</label>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="splitType"
+                value="equal"
+                checked={splitType === "equal"}
+                onChange={handleSplitTypeChange}
+              />
+              Equal
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="splitType"
+                value="custom"
+                checked={splitType === "custom"}
+                onChange={handleSplitTypeChange}
+              />
+              Custom
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label className="block mb-1">Who owes?</label>
+          <div className="flex flex-wrap gap-4">
+            {groupInfo.members.map(
+              (member, index) =>
+                member !== newTransaction.payer && (
+                  <div key={index} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={newTransaction.splitAmong.hasOwnProperty(member)}
+                      onChange={() => handleCheckboxChange(member)}
+                    />
+                    <span>{member}</span>
+                    {splitType === "custom" &&
+                      newTransaction.splitAmong[member] !== undefined && (
+                        <input
+                          type="number"
+                          className="border p-1 rounded w-20"
+                          value={newTransaction.splitAmong[member]}
+                          onChange={(e) =>
+                            handleAmountChange(member, e.target.value)
+                          }
+                          min="0"
+                          step="0.01"
+                        />
+                      )}
+                  </div>
+                )
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label className="block mb-1">When?</label>
+          <input
+            type="date"
+            className="border p-2 rounded w-full"
+            name="date"
+            value={newTransaction.date}
+            onChange={handleInputChange}
+            required
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg px-4 py-2 transition"
+        >
+          Add Transaction
+        </button>
       </form>
+
+      {transactions.length > 0 && (
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold mb-2">Transactions</h3>
+          <ul className="space-y-2">
+            {transactions.map((txn, index) => (
+              <li key={index} className="border-b pb-2">
+                <div>
+                  <strong>{txn.payer}</strong> paid ₹{txn.amount.toFixed(2)} for{" "}
+                  {txn.purpose}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {txn.splitType === "equal" ? (
+                    <>
+                      Split equally among all{" "}
+                      {Object.keys(txn.shares).length + 1} members
+                    </>
+                  ) : (
+                    <>
+                      Custom split among: {Object.keys(txn.shares).join(", ")}
+                    </>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <DebtGraph
+        debtGraph={groupInfo.debtGraph}
+        onClearDebt={handleClearDebt}
+      />
+      <DebtSettlements debtGraph={groupInfo.debtGraph} />
     </div>
   );
 };
