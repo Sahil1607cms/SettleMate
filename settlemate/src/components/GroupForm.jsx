@@ -7,28 +7,27 @@ const GroupForm = () => {
   const [numberOfPeople, setNumberOfPeople] = useState(0);
   const [memberNames, setMemberNames] = useState([]);
 
-  const navigate=useNavigate();
-  //handling group name value in form
+  const navigate = useNavigate();
+
   const handleGroupName = (e) => {
     setGroupName(e.target.value);
   };
 
-  //handling purpose value in form
   const handlePurpose = (e) => {
     setPurpose(e.target.value);
   };
 
-  //handling total number of people in the group in form
   const handleNumChange = (e) => {
+    // the max range of count will exist between 0 to the target value 
     const count = Math.max(0, Number(e.target.value)) || 0;
     setNumberOfPeople(count);
-    setMemberNames(new Array(count).fill("")); //setting the number of people , the array gets initialized with empty elements
+    // intialize empty array of size count
+    setMemberNames(new Array(count).fill(""));
   };
 
-  //handling each member name in form
   const handleMemberChange = (id, value) => {
     setMemberNames((prev) => {
-      const updatedMembers = [...prev]; // creating copy of the array
+      const updatedMembers = [...prev];
       updatedMembers[id] = value;
       return updatedMembers;
     });
@@ -37,21 +36,44 @@ const GroupForm = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    const newGroup={
-      id:Date.now(),
-      name:groupName,purpose,
-      members:memberNames,
+    // Validate all member names are filled
+    if (memberNames.some((name) => !name.trim())) {
+      alert("Please enter names for all members");
+      return;
     }
 
-    localStorage.setItem("GroupInfo",JSON.stringify(newGroup));
+    const newGroup = {
+      id: Date.now(),
+      name: groupName,
+      purpose,
+      members: memberNames,
+      // Initialize debt graph 
+      debtGraph: memberNames.reduce((graph, member) => {
+        graph[member] = memberNames.reduce((edges, other) => {
+          if (other !== member) edges[other] = 0;
+          return edges;
+        }, {});
+        return graph;
+      }, {}),
+    };
+
+    // Get existing groups or initialize empty array if none exist
+    const existingGroups = JSON.parse(localStorage.getItem("groups") || "[]");
+
+    // updating the groups info, previous + newgroup
+    localStorage.setItem(
+      "groups",
+      JSON.stringify([...existingGroups, newGroup])
+    );
+    //marking and storing the current group on which we are working as "currentGroup"
+    localStorage.setItem("currentGroup", JSON.stringify(newGroup));
+
     navigate("/transactions");
   };
 
-  //storing the information of all groups in object so that it can be stored in localstorage
-
   return (
     <form className="bg-black text-white p-6 rounded-lg shadow-lg max-w-2xl mx-auto mt-[100px]">
-      <h1 className=" text-center text-3xl font-bold pb-[30px]">SettleMate</h1>
+      <h1 className="text-center text-3xl font-bold pb-[30px]">SettleMate</h1>
       <h2 className="text-xl font-semibold text-gray-300 mb-4 text-center">
         Create New Group
       </h2>
@@ -87,6 +109,7 @@ const GroupForm = () => {
           placeholder="Number of People"
           value={numberOfPeople}
           onChange={handleNumChange}
+          min="1"
           required
         />
 
@@ -99,11 +122,13 @@ const GroupForm = () => {
             placeholder={`Member ${index + 1}`}
             value={memberNames[index]}
             onChange={(e) => handleMemberChange(index, e.target.value)}
+            required
           />
         ))}
 
         {/* Submit Button */}
         <button
+          type="submit"
           className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg px-4 py-2 transition"
           onClick={handleSubmit}
         >
