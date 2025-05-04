@@ -15,14 +15,14 @@ const initializeTransaction = (members, defaultPayer = "") => ({
   date: new Date().toISOString().split("T")[0],
 });
 
-const calculateShares = (transaction, splitType) => {
+const calculateShares = (transaction, splitType, groupMembers) => {
   if (splitType === "equal") {
     // For equal splits, include ALL members (payer + selected members)
-    const selectedMembers = Object.keys(transaction.splitAmong);
-    const totalParticipants = selectedMembers.length + 1; // +1 for payer
+    const allMembers = groupMembers.filter((member)=>member!==transaction.payer);
+    const totalParticipants = allMembers.length + 1; // +1 for payer
     const share = transaction.amount / totalParticipants;
 
-    return selectedMembers.reduce((acc, member) => {
+    return allMembers.reduce((acc, member) => {
       acc[member] = share;
       return acc;
     }, {});
@@ -110,7 +110,8 @@ const Transactions = () => {
     setNewTransaction((prev) => ({
       ...prev,
       splitAmong: groupInfo.members.reduce((acc, member) => {
-        acc[member] = 0; // Include all members
+        if(member!==prev.payer)
+        acc[member] = newSplitType==="equal"?0:undefined; // Include all members
         return acc;
       }, {}),
     }));
@@ -119,10 +120,13 @@ const Transactions = () => {
   const handleCheckboxChange = (member) => {
     setNewTransaction((prev) => {
       const updatedSplitAmong = { ...prev.splitAmong };
-      if (updatedSplitAmong[member] === undefined) {
-        updatedSplitAmong[member] = 0;
-      } else {
-        delete updatedSplitAmong[member];
+      if(splitType==="equal") return prev;
+      else {
+        if (updatedSplitAmong[member] === undefined) {
+          updatedSplitAmong[member] = 0;
+        } else {
+          delete updatedSplitAmong[member];
+        }
       }
       return { ...prev, splitAmong: updatedSplitAmong };
     });
@@ -158,7 +162,7 @@ const Transactions = () => {
     const error = validateTransaction(newTransaction, splitType);
     if (error) return alert(error);
 
-    const shares = calculateShares(newTransaction, splitType);
+    const shares = calculateShares(newTransaction, splitType,groupInfo.members);
     const updatedDebtGraph = updateDebtGraph(
       groupInfo.debtGraph,
       newTransaction,
