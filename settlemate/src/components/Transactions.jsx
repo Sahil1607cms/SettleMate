@@ -9,7 +9,7 @@ const initializeTransaction = (members, defaultPayer = "") => ({
   amount: "",
   splitAmong: members.reduce((acc, member) => {
     // Initialize all members except payer
-    if (member !== defaultPayer) acc[member] = 0;
+    if (member !== defaultPayer) acc[member] = 0; //by default we are going with custom split approach, handling equal split in calculate share function
     return acc;
   }, {}),
   date: new Date().toISOString().split("T")[0],
@@ -44,15 +44,18 @@ const updateDebtGraph = (currentGraph, transaction, shares) => {
   return updatedGraph;
 };
 
-
-  const validateTransaction = (transaction, splitType) => {
+const validateTransaction = (transaction, splitType) => {
   const amount = parseFloat(transaction.amount);
+  // Is the amount a number and positive?
   if (isNaN(amount)) return "Please enter a valid amount";
   if (amount <= 0) return "Amount must be greater than 0";
 
+  // Is there anyone selected to owe money?
   const selectedMembers = Object.keys(transaction.splitAmong);
-  if (selectedMembers.length === 0) return "Please select at least one person who owes";
+  if (selectedMembers.length === 0)
+    return "Please select at least one person who owes";
 
+  // if there is custom split, then calculate what each member owers in splitamong
   if (splitType === "custom") {
     const totalCustomAmount = Object.values(transaction.splitAmong).reduce(
       (sum, val) => sum + val,
@@ -60,13 +63,15 @@ const updateDebtGraph = (currentGraph, transaction, shares) => {
     );
 
     // Check upper bound
-    if (totalCustomAmount > amount + 0.01) { // Adding small tolerance
+    if (totalCustomAmount > amount + 0.01) {
+      // Adding small tolerance
       return "Total owed amounts exceed transaction value";
     }
 
     // Check lower bound (payer can't receive money)
     const payerContribution = amount - totalCustomAmount;
-    if (payerContribution < -0.01) { // Small tolerance
+    if (payerContribution < -0.01) {
+      // Small tolerance
       return "Payer's contribution cannot be negative";
     }
   }
@@ -98,6 +103,7 @@ const Transactions = () => {
     setNewTransaction((prev) => ({ ...prev, [name]: value }));
   };
 
+  //as soon as checkbox is changed the split amount is resetted to 0
   const handleSplitTypeChange = (e) => {
     const newSplitType = e.target.value;
     setSplitType(newSplitType);
@@ -233,35 +239,33 @@ const Transactions = () => {
             required
           />
         </div>
-<div>
-  <label className="block mb-1">Split Type</label>
-  <div className="flex gap-4">
-    <label className="flex items-center gap-2">
-      <input
-        type="radio"
-        name="splitType"
-        value="equal"
-        checked={splitType === "equal"}
-        onChange={handleSplitTypeChange}
-        className="form-radio"
-      />
-      Equal Split
-    </label>
-    <label className="flex items-center gap-2">
-      <input
-        type="radio"
-        name="splitType"
-        value="custom"
-        checked={splitType === "custom"}
-        onChange={handleSplitTypeChange}
-        className="form-radio"
-      />
-      Custom Split
-    </label>
-  </div>
-</div>
-
- 
+        <div>
+          <label className="block mb-1">Split Type</label>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="splitType"
+                value="equal"
+                checked={splitType === "equal"} //set to true if splittype is equal(it will be checked)
+                onChange={handleSplitTypeChange}
+                className="form-radio"
+              />
+              Equal Split
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="splitType"
+                value="custom"
+                checked={splitType === "custom"}
+                onChange={handleSplitTypeChange}
+                className="form-radio" 
+              />
+              Custom Split
+            </label>
+          </div>
+        </div>
 
         <div>
           <label className="block mb-1">Who owes?</label>
