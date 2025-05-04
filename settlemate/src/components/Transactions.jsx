@@ -9,7 +9,7 @@ const initializeTransaction = (members, defaultPayer = "") => ({
   amount: "",
   splitAmong: members.reduce((acc, member) => {
     // Initialize all members except payer
-    if (member !== defaultPayer) acc[member] = 0; //by default we are going with custom split approach, handling equal split in calculate share function
+    if (member !== defaultPayer) acc[member] = 0; 
     return acc;
   }, {}),
   date: new Date().toISOString().split("T")[0],
@@ -27,6 +27,7 @@ const calculateShares = (transaction, splitType, groupMembers) => {
       return acc;
     }, {});
   }
+  else 
   return { ...transaction.splitAmong };
 };
 
@@ -186,6 +187,7 @@ const Transactions = () => {
 
     setGroupInfo(updatedGroup);
     setTransactions([...transactions, transactionRecord]);
+    //resetting the newTransaction for fresh transaction
     setNewTransaction(
       initializeTransaction(groupInfo.members, newTransaction.payer)
     );

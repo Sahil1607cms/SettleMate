@@ -5,10 +5,10 @@ const DebtGraph = ({ debtGraph, onClearDebt }) => {
   
   return (
     <div className="mt-6">
-      <h3 className="text-lg font-semibold mb-2">Debt Relationships</h3>
+      <h3 className="text-lg font-semibold mb-2">Unsettled Debt Relationships</h3>
       <div className="grid grid-cols-4 gap-2">
-        <div className="font-bold">From</div>
-        <div className="font-bold">To</div>
+        <div className="font-bold">Receiver</div>
+        <div className="font-bold">Giver</div>
         <div className="font-bold">Amount</div>
         <div className="font-bold">Action</div>
         
@@ -25,7 +25,7 @@ const DebtGraph = ({ debtGraph, onClearDebt }) => {
                       className="text-blue-500 hover:text-blue-700 text-sm"
                       onClick={() => onClearDebt(from, to)}
                     >
-                      Clear
+                      Settle
                     </button>
                   </div>
                 </React.Fragment>
