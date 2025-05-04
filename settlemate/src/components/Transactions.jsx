@@ -9,7 +9,7 @@ const initializeTransaction = (members, defaultPayer = "") => ({
   amount: "",
   splitAmong: members.reduce((acc, member) => {
     // Initialize all members except payer
-    if (member !== defaultPayer) acc[member] = 0; 
+    if (member !== defaultPayer) acc[member] = 0;
     return acc;
   }, {}),
   date: new Date().toISOString().split("T")[0],
@@ -18,7 +18,9 @@ const initializeTransaction = (members, defaultPayer = "") => ({
 const calculateShares = (transaction, splitType, groupMembers) => {
   if (splitType === "equal") {
     // For equal splits, include ALL members (payer + selected members)
-    const allMembers = groupMembers.filter((member)=>member!==transaction.payer);
+    const allMembers = groupMembers.filter(
+      (member) => member !== transaction.payer
+    );
     const totalParticipants = allMembers.length + 1; // +1 for payer
     const share = transaction.amount / totalParticipants;
 
@@ -26,9 +28,7 @@ const calculateShares = (transaction, splitType, groupMembers) => {
       acc[member] = share;
       return acc;
     }, {});
-  }
-  else 
-  return { ...transaction.splitAmong };
+  } else return { ...transaction.splitAmong };
 };
 
 const updateDebtGraph = (currentGraph, transaction, shares) => {
@@ -108,27 +108,41 @@ const Transactions = () => {
   const handleSplitTypeChange = (e) => {
     const newSplitType = e.target.value;
     setSplitType(newSplitType);
-    setNewTransaction((prev) => ({
-      ...prev,
-      splitAmong: groupInfo.members.reduce((acc, member) => {
-        if(member!==prev.payer)
-        acc[member] = newSplitType==="equal"?0:undefined; // Include all members
-        return acc;
-      }, {}),
-    }));
+    setNewTransaction((prev) => {
+      if(newSplitType==="equal"){
+        return{
+          ...prev,
+          splitAmong:groupInfo.members.reduce((acc,member)=>{
+            if(member!==prev.payer) acc[member]=0;
+            return acc;
+          },{})
+        };
+      }
+      else {
+        return {
+          ...prev,
+          splitAmong:groupInfo.members.reduce((acc,member)=>{
+            if(member!==prev.payer) acc[member]=prev.splitAmong[member]!==undefined?prev.splitAmong[member]:undefined;
+            return acc;
+          },{})
+        };
+      }
+    });
   };
 
   const handleCheckboxChange = (member) => {
-    setNewTransaction((prev) => {
+    if (splitType === "equal") return ;
+
+    setNewTransaction(prev => {
       const updatedSplitAmong = { ...prev.splitAmong };
-      if(splitType==="equal") return prev;
-      else {
-        if (updatedSplitAmong[member] === undefined) {
-          updatedSplitAmong[member] = 0;
-        } else {
-          delete updatedSplitAmong[member];
-        }
+      
+      // Toggle the member's presence
+      if (updatedSplitAmong[member] === undefined) {
+        updatedSplitAmong[member] = 0; // Add with default 0 amount
+      } else {
+        delete updatedSplitAmong[member]; // Remove
       }
+      
       return { ...prev, splitAmong: updatedSplitAmong };
     });
   };
@@ -163,7 +177,11 @@ const Transactions = () => {
     const error = validateTransaction(newTransaction, splitType);
     if (error) return alert(error);
 
-    const shares = calculateShares(newTransaction, splitType,groupInfo.members);
+    const shares = calculateShares(
+      newTransaction,
+      splitType,
+      groupInfo.members
+    );
     const updatedDebtGraph = updateDebtGraph(
       groupInfo.debtGraph,
       newTransaction,
@@ -266,7 +284,7 @@ const Transactions = () => {
                 value="custom"
                 checked={splitType === "custom"}
                 onChange={handleSplitTypeChange}
-                className="form-radio" 
+                className="form-radio"
               />
               Custom Split
             </label>
@@ -284,7 +302,8 @@ const Transactions = () => {
                       type="checkbox"
                       checked={newTransaction.splitAmong.hasOwnProperty(member)}
                       onChange={() => handleCheckboxChange(member)}
-                    />
+                      disabled={splitType==="equal"}
+                    />  
                     <span>{member}</span>
                     {splitType === "custom" &&
                       newTransaction.splitAmong[member] !== undefined && (
