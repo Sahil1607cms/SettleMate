@@ -17,14 +17,12 @@ const initializeTransaction = (members, defaultPayer = "") => ({
 
 const calculateShares = (transaction, splitType, groupMembers) => {
   if (splitType === "equal") {
-    // For equal splits, include ALL members (payer + selected members)
-    const allMembers = groupMembers.filter(
-      (member) => member !== transaction.payer
-    );
-    const totalParticipants = allMembers.length + 1; // +1 for payer
+    // For equal splits, include ONLY checked members (including payer if checked)
+    const checkedMembers = Object.keys(transaction.splitAmong);
+    const totalParticipants = checkedMembers.length;
+    if (totalParticipants === 0) return {}; // avoid division by zero
     const share = transaction.amount / totalParticipants;
-
-    return allMembers.reduce((acc, member) => {
+    return checkedMembers.reduce((acc, member) => {
       acc[member] = share;
       return acc;
     }, {});
@@ -110,10 +108,11 @@ const Transactions = () => {
     setSplitType(newSplitType);
     setNewTransaction((prev) => {
       if(newSplitType==="equal"){
+        // By default, all members (including payer) are checked
         return{
           ...prev,
           splitAmong:groupInfo.members.reduce((acc,member)=>{
-            if(member!==prev.payer) acc[member]=0;
+            acc[member]=0;
             return acc;
           },{})
         };
@@ -131,8 +130,6 @@ const Transactions = () => {
   };
 
   const handleCheckboxChange = (member) => {
-    if (splitType === "equal") return ;
-
     setNewTransaction(prev => {
       const updatedSplitAmong = { ...prev.splitAmong };
       
@@ -295,31 +292,29 @@ const Transactions = () => {
           <label className="block mb-1">Who owes?</label>
           <div className="flex flex-wrap gap-4">
             {groupInfo.members.map(
-              (member, index) =>
-                member !== newTransaction.payer && (
-                  <div key={index} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={newTransaction.splitAmong.hasOwnProperty(member)}
-                      onChange={() => handleCheckboxChange(member)}
-                      disabled={splitType==="equal"}
-                    />  
-                    <span>{member}</span>
-                    {splitType === "custom" &&
-                      newTransaction.splitAmong[member] !== undefined && (
-                        <input
-                          type="number"
-                          className="border p-1 rounded w-20"
-                          value={newTransaction.splitAmong[member]}
-                          onChange={(e) =>
-                            handleAmountChange(member, e.target.value)
-                          }
-                          min="0"
-                          step="0.01"
-                        />
-                      )}
-                  </div>
-                )
+              (member, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={newTransaction.splitAmong.hasOwnProperty(member)}
+                    onChange={() => handleCheckboxChange(member)}
+                  />  
+                  <span>{member}</span>
+                  {splitType === "custom" &&
+                    newTransaction.splitAmong[member] !== undefined && (
+                      <input
+                        type="number"
+                        className="border p-1 rounded w-20"
+                        value={newTransaction.splitAmong[member]}
+                        onChange={(e) =>
+                          handleAmountChange(member, e.target.value)
+                        }
+                        min="0"
+                        step="0.01"
+                      />
+                    )}
+                </div>
+              )
             )}
           </div>
         </div>
