@@ -353,7 +353,7 @@ const Transactions = () => {
                   {txn.splitType === "equal" ? (
                     <>
                       Split equally among all{" "}
-                      {Object.keys(txn.shares).length + 1} members
+                      {Object.keys(txn.shares).length } members
                     </>
                   ) : (
                     <>
