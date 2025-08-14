@@ -124,10 +124,6 @@ This project is licensed under the ISC License - see the [LICENSE](LICENSE) file
 
 If you find any bugs or have feature requests, please [open an issue](https://github.com/Sahil1607cms/SettleMate/issues) on GitHub.
 
-## 📱 Screenshots
-
-*Add screenshots of your application here to showcase the UI*
-
 ---
 
 **SettleMate** - Making group expenses simple and fair! 💸
